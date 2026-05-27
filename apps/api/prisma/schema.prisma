@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  OPERATIONS_MANAGER
+  FINANCE_MANAGER
+  ROUTE_MANAGER
+  FLEET_MARSHAL
+  DISPATCHER
+  DRIVER
+  CONDUCTOR
+  MAINTENANCE_TECH
+  REGULATOR
+}
+
+enum AlertSeverity {
+  CRITICAL
+  WARNING
+  INFO
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum TripStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  MPESA_STK
+  NFC_TAP
+  QR_CODE
+  CASH
+}
+
+enum VehicleStatus {
+  ACTIVE
+  IDLE
+  MAINTENANCE
+  OFFLINE
+}
+
+enum FuelEventType {
+  FILL_UP
+  CONSUMPTION
+  ANOMALY
+}
+
+enum SafetyEventType {
+  HARSH_BRAKE
+  HARSH_ACCEL
+  SPEED_VIOLATION
+  SUDDEN_STOP
+  ROUTE_DEVIATION
+  PROLONGED_IDLING
+}
+
+model User {
+  id              String     @id @default(cuid())
+  name            String
+  email           String     @unique
+  phone           String     @unique
+  passwordHash    String
+  passwordChangeAllowed Boolean @default(true)
+  role            UserRole
+  assignedRouteId String?
+  assignedRoute   Route?     @relation(fields: [assignedRouteId], references: [id])
+  createdAt       DateTime   @default(now())
+  lastLoginAt     DateTime?
+  driverProfile   Driver?
+  auditLogs       AuditLog[]
+  acknowledgedAlerts Alert[] @relation("AlertAcknowledgedBy")
+
+  @@index([role])
+  @@index([assignedRouteId])
+}
+
+model Route {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  origin        String
+  destination   String
+  distanceKm    Decimal        @db.Decimal(8, 2)
+  stages        Json
+  vehicles      Vehicle[]
+  users         User[]
+  trips         Trip[]
+  revenueSplits RevenueSplit[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Vehicle {
+  id              String              @id
+  nickname        String?
+  capacity        Int
+  year            Int
+  makeModel       String
+  assignedRouteId String?
+  assignedRoute   Route?              @relation(fields: [assignedRouteId], references: [id])
+  status          VehicleStatus       @default(OFFLINE)
+  currentDriverId String?
+  currentDriver   Driver?             @relation("CurrentDriver", fields: [currentDriverId], references: [id])
+  odometer        Decimal             @db.Decimal(12, 2)
+  trips           Trip[]
+  telemetry       TelemetrySnapshot[]
+  gpsPoints       GpsPoint[]
+  fareTransactions FareTransaction[]
+  alerts          Alert[]
+  maintenanceJobs MaintenanceJob[]
+  obdFaultCodes   OBDFaultCode[]
+  safetyEvents    SafetyEvent[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([assignedRouteId])
+  @@index([status])
+  @@index([currentDriverId])
+}
+
+model Driver {
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  user           User             @relation(fields: [userId], references: [id])
+  licenseNumber  String           @unique
+  licenseExpiry  DateTime
+  safetyScore    Int              @default(100)
+  mpesaPhone     String
+  currentVehicles Vehicle[]       @relation("CurrentDriver")
+  driverTrips    Trip[]           @relation("TripDriver")
+  conductorTrips Trip[]           @relation("TripConductor")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([safetyScore])
+  @@index([licenseExpiry])
+}
+
+model Trip {
+  id              String            @id @default(cuid())
+  vehicleId       String
+  vehicle         Vehicle           @relation(fields: [vehicleId], references: [id])
+  routeId         String
+  route           Route             @relation(fields: [routeId], references: [id])
+  driverId        String
+  driver          Driver            @relation("TripDriver", fields: [driverId], references: [id])
+  conductorId     String?
+  conductor       Driver?           @relation("TripConductor", fields: [conductorId], references: [id])
+  startedAt       DateTime?
+  completedAt     DateTime?
+  status          TripStatus        @default(SCHEDULED)
+  startOdometer   Decimal?          @db.Decimal(12, 2)
+  endOdometer     Decimal?          @db.Decimal(12, 2)
+  totalPassengers Int               @default(0)
+  totalRevenue    Decimal           @default(0) @db.Decimal(12, 2)
+  gpsPoints       GpsPoint[]
+  fareTransactions FareTransaction[]
+  alerts          Alert[]
+  safetyEvents    SafetyEvent[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([vehicleId, startedAt])
+  @@index([routeId, startedAt])
+  @@index([status])
+}
+
+model TelemetrySnapshot {
+  id             String   @id @default(cuid())
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id])
+  timestamp      DateTime
+  latitude       Decimal  @db.Decimal(10, 7)
+  longitude      Decimal  @db.Decimal(10, 7)
+  speedKmh       Decimal  @db.Decimal(6, 2)
+  headingDeg     Decimal  @db.Decimal(5, 2)
+  fuelPercent    Decimal  @db.Decimal(5, 2)
+  fuelLitres     Decimal  @db.Decimal(8, 2)
+  passengerCount Int
+  engineOn       Boolean
+  odometer       Decimal  @db.Decimal(12, 2)
+
+  @@index([vehicleId, timestamp])
+  @@index([timestamp])
+  @@map("telemetry_snapshots")
+}
+
+model GpsPoint {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+  tripId    String?
+  trip      Trip?     @relation(fields: [tripId], references: [id])
+  timestamp DateTime
+  latitude  Decimal  @db.Decimal(10, 7)
+  longitude Decimal  @db.Decimal(10, 7)
+  speedKmh  Decimal  @db.Decimal(6, 2)
+
+  @@index([vehicleId, timestamp])
+  @@index([tripId, timestamp])
+  @@map("gps_points")
+}
+
+model FareTransaction {
+  id                  String        @id @default(cuid())
+  vehicleId           String
+  vehicle             Vehicle       @relation(fields: [vehicleId], references: [id])
+  tripId              String?
+  trip                Trip?         @relation(fields: [tripId], references: [id])
+  timestamp           DateTime
+  boardingStageIndex  Int
+  alightingStageIndex Int?
+  amountKes           Decimal       @db.Decimal(12, 2)
+  paymentMethod       PaymentMethod
+  mpesaRef            String?
+  splitData           Json
+  isReconciled        Boolean       @default(false)
+
+  @@index([vehicleId, timestamp])
+  @@index([tripId])
+  @@index([paymentMethod])
+  @@index([isReconciled])
+}
+
+model RevenueSplit {
+  id             String   @id @default(cuid())
+  routeId        String
+  route          Route    @relation(fields: [routeId], references: [id])
+  fuelPct        Decimal  @db.Decimal(5, 2)
+  driverPct      Decimal  @db.Decimal(5, 2)
+  conductorPct   Decimal  @db.Decimal(5, 2)
+  maintenancePct Decimal  @db.Decimal(5, 2)
+  saccoPct       Decimal  @db.Decimal(5, 2)
+  effectiveFrom  DateTime
+
+  @@index([routeId, effectiveFrom])
+}
+
+model Alert {
+  id             String        @id @default(cuid())
+  vehicleId      String
+  vehicle        Vehicle       @relation(fields: [vehicleId], references: [id])
+  tripId         String?
+  trip           Trip?         @relation(fields: [tripId], references: [id])
+  type           String
+  severity       AlertSeverity
+  status         AlertStatus   @default(OPEN)
+  message        String
+  triggeredAt    DateTime
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  acknowledgedUser User?       @relation("AlertAcknowledgedBy", fields: [acknowledgedBy], references: [id])
+  resolvedAt     DateTime?
+
+  @@index([vehicleId, triggeredAt])
+  @@index([severity, status])
+  @@index([tripId])
+}
+
+model MaintenanceJob {
+  id           String    @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id])
+  type         String
+  scheduledAt  DateTime
+  completedAt  DateTime?
+  costKes      Decimal?  @db.Decimal(12, 2)
+  technicianId String?
+  notes        String?
+  odometer     Decimal   @db.Decimal(12, 2)
+
+  @@index([vehicleId, scheduledAt])
+  @@index([completedAt])
+}
+
+model OBDFaultCode {
+  id          String        @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id])
+  dtcCode     String
+  description String
+  severity    AlertSeverity
+  detectedAt  DateTime
+  clearedAt   DateTime?
+
+  @@index([vehicleId, detectedAt])
+  @@index([clearedAt])
+}
+
+model SafetyEvent {
+  id           String          @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle         @relation(fields: [vehicleId], references: [id])
+  tripId       String?
+  trip         Trip?           @relation(fields: [tripId], references: [id])
+  type         SafetyEventType
+  timestamp    DateTime
+  latitude     Decimal         @db.Decimal(10, 7)
+  longitude    Decimal         @db.Decimal(10, 7)
+  value        Decimal         @db.Decimal(8, 2)
+  videoClipUrl String?
+
+  @@index([vehicleId, timestamp])
+  @@index([tripId, timestamp])
+  @@index([type])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  timestamp  DateTime @default(now())
+  ipAddress  String
+
+  @@index([userId, timestamp])
+  @@index([entityType, entityId])
+}

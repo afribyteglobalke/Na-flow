@@ -1,0 +1,18 @@
+{
+  "name": "na-flow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Matatu Fleet Intelligence System monorepo.",
+  "scripts": {
+    "dev": "corepack pnpm --parallel --filter @na-flow/api --filter @na-flow/dashboard dev",
+    "build": "corepack pnpm -r build",
+    "lint": "corepack pnpm -r lint",
+    "test": "corepack pnpm -r test",
+    "typecheck": "corepack pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
