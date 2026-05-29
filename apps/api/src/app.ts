@@ -8,11 +8,14 @@ import { loadEnv } from "./config/env.js";
 import type { AuthUser } from "./middleware/authenticate.js";
 import { registerAlertsRoutes } from "./modules/alerts/alerts.routes.js";
 import { registerAuthRoutes } from "./modules/auth/auth.routes.js";
+import { registerConductorsRoutes } from "./modules/conductors/conductors.routes.js";
+import { registerCrewRoutes } from "./modules/crew/crew.routes.js";
 import { registerDashboardRoutes } from "./modules/dashboard/dashboard.routes.js";
 import { registerDriversRoutes } from "./modules/drivers/drivers.routes.js";
 import { registerMaintenanceRoutes } from "./modules/maintenance/maintenance.routes.js";
 import { registerPaymentsRoutes } from "./modules/payments/payments.routes.js";
 import { registerReportsRoutes } from "./modules/reports/reports.routes.js";
+import { registerRoutesRoutes } from "./modules/routes/routes.routes.js";
 import { registerShiftsRoutes } from "./modules/shifts/shifts.routes.js";
 import { registerTrackingRoutes } from "./modules/tracking/tracking.routes.js";
 import { registerTripsRoutes } from "./modules/trips/trips.routes.js";
@@ -72,9 +75,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerTrackingRoutes, { prefix: "/api/v1/tracking" });
   await app.register(registerShiftsRoutes, { prefix: "/api/v1/shifts" });
   await app.register(registerTripsRoutes, { prefix: "/api/v1/trips" });
+  await app.register(registerRoutesRoutes, { prefix: "/api/v1/routes" });
   await app.register(registerPaymentsRoutes, { prefix: "/api/v1/payments" });
   await app.register(registerAlertsRoutes, { prefix: "/api/v1/alerts" });
   await app.register(registerDriversRoutes, { prefix: "/api/v1/drivers" });
+  await app.register(registerConductorsRoutes, { prefix: "/api/v1/conductors" });
+  await app.register(registerCrewRoutes, { prefix: "/api/v1/crew" });
   await app.register(registerMaintenanceRoutes, { prefix: "/api/v1/maintenance" });
   await app.register(registerReportsRoutes, { prefix: "/api/v1/reports" });
 
@@ -84,10 +90,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 function isRouteAllowed(role: string, url: string): boolean {
   if (role === "SUPER_ADMIN") return true;
   if (role === "DRIVER") {
-    return url.startsWith("/api/v1/shifts") || url.startsWith("/api/v1/vehicles") || url.startsWith("/api/v1/trips") || url.startsWith("/api/v1/alerts");
+    return url.startsWith("/api/v1/shifts") || url.startsWith("/api/v1/vehicles") || url.startsWith("/api/v1/trips") || url.startsWith("/api/v1/alerts") || url.startsWith("/api/v1/payments") || url.startsWith("/api/v1/routes");
+  }
+  if (role === "CONDUCTOR") {
+    return url.startsWith("/api/v1/shifts") || url.startsWith("/api/v1/vehicles") || url.startsWith("/api/v1/payments") || url.startsWith("/api/v1/alerts") || url.startsWith("/api/v1/routes");
   }
   if (role === "FLEET_MARSHAL" || role === "DISPATCHER" || role === "OPERATIONS_MANAGER") {
-    return url.startsWith("/api/v1/dashboard") || url.startsWith("/api/v1/vehicles") || url.startsWith("/api/v1/tracking") || url.startsWith("/api/v1/alerts");
+    return url.startsWith("/api/v1/dashboard") || url.startsWith("/api/v1/vehicles") || url.startsWith("/api/v1/tracking") || url.startsWith("/api/v1/alerts") || url.startsWith("/api/v1/routes");
   }
   return url.startsWith("/api/v1/reports");
 }

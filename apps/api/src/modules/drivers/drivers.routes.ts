@@ -15,6 +15,7 @@ const createDriverSchema = z.object({
   licenseNumber: z.string().min(3),
   licenseExpiry: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   mpesaPhone: z.string().min(7),
+  assignedVehicleId: z.string().optional(),
   assignedRouteId: z.string().optional()
 });
 
@@ -22,20 +23,21 @@ export async function registerDriversRoutes(app: FastifyInstance): Promise<void>
   app.get("/", async (_request, reply) => {
     try {
       const drivers = await prisma.driver.findMany({
-        include: { user: true },
+        include: { user: { include: { assignedRoute: true } } },
         orderBy: { createdAt: "desc" }
       });
       return ok(
         reply,
         drivers.map((driver) => ({
           id: driver.id,
+          userId: driver.user.id,
           name: driver.user.name,
           licenseNumber: driver.licenseNumber,
           experience: "New",
           phone: driver.user.phone,
           safetyScore: driver.safetyScore,
-          vehicle: "Unassigned",
-          route: driver.user.assignedRouteId ?? "Unassigned",
+          vehicle: driver.user.assignedVehicleId ?? "Unassigned",
+          route: driver.user.assignedRoute?.name ?? "Unassigned",
           tripsToday: 0,
           revenueKes: 0,
           harshEvents: 0
@@ -71,6 +73,7 @@ export async function registerDriversRoutes(app: FastifyInstance): Promise<void>
             passwordHash,
             passwordChangeAllowed: false,
             role: UserRole.DRIVER,
+            assignedVehicleId: body.assignedVehicleId,
             ...(body.assignedRouteId ? { assignedRoute: { connect: { id: body.assignedRouteId } } } : {})
           }
         });

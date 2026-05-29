@@ -20,6 +20,8 @@ interface AuthRecord {
   role: string;
   assignedVehicleId?: string;
   assignedRoute?: string;
+  assignedRouteId?: string | null;
+  assignedRouteName?: string;
   passwordChangeAllowed?: boolean;
 }
 
@@ -38,7 +40,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       name: user.name,
       role: user.role,
       assignedVehicleId: user.assignedVehicleId,
-      assignedRoute: user.assignedRoute,
+      assignedRoute: user.assignedRoute ?? user.assignedRouteName,
       passwordChangeAllowed: user.passwordChangeAllowed ?? user.role !== "DRIVER"
     };
 
@@ -65,7 +67,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       name: user.name,
       role: user.role,
       assignedVehicleId: user.assignedVehicleId,
-      assignedRoute: user.assignedRoute,
+      assignedRoute: user.assignedRoute ?? user.assignedRouteName,
       passwordChangeAllowed: user.passwordChangeAllowed ?? user.role !== "DRIVER"
     };
 
@@ -81,8 +83,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const schema = z.object({ identifier: z.string().min(3) });
     const { identifier } = schema.parse(request.body);
     const user = await findUserForLogin(identifier);
-    if (user?.role === "DRIVER" || user?.passwordChangeAllowed === false) {
-      return fail(reply, 403, "PASSWORD_ADMIN_MANAGED", "Driver passwords are managed by an admin");
+    if (user?.role === "DRIVER" || user?.role === "CONDUCTOR" || user?.passwordChangeAllowed === false) {
+      return fail(reply, 403, "PASSWORD_ADMIN_MANAGED", "Crew passwords are managed by an admin");
     }
     return ok(reply, { queued: true });
   });
@@ -90,8 +92,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const schema = z.object({ identifier: z.string().min(3), password: z.string().min(8) });
     const { identifier } = schema.parse(request.body);
     const user = await findUserForLogin(identifier);
-    if (user?.role === "DRIVER" || user?.passwordChangeAllowed === false) {
-      return fail(reply, 403, "PASSWORD_ADMIN_MANAGED", "Driver passwords are managed by an admin");
+    if (user?.role === "DRIVER" || user?.role === "CONDUCTOR" || user?.passwordChangeAllowed === false) {
+      return fail(reply, 403, "PASSWORD_ADMIN_MANAGED", "Crew passwords are managed by an admin");
     }
     return ok(reply, { reset: true });
   });
@@ -100,12 +102,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 async function findUserForLogin(identifier: string): Promise<AuthRecord | null> {
   if (shouldUseDatabase()) {
     try {
-      const dbUser = await prisma.user.findFirst({
-        where: {
-          OR: [{ email: identifier }, { phone: identifier }]
-        }
-      });
-      if (dbUser) return dbUser;
+    const dbUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: identifier }, { phone: identifier }]
+      },
+      include: { assignedRoute: true }
+    });
+      if (dbUser) return { ...dbUser, assignedRouteName: dbUser.assignedRoute?.name };
     } catch {
       // Local tests and first-run environments can use the demo users until Prisma is pushed.
     }
@@ -117,8 +120,8 @@ async function findUserForLogin(identifier: string): Promise<AuthRecord | null> 
 async function findUserById(id: string): Promise<AuthRecord | null> {
   if (shouldUseDatabase()) {
     try {
-      const dbUser = await prisma.user.findUnique({ where: { id } });
-      if (dbUser) return dbUser;
+      const dbUser = await prisma.user.findUnique({ where: { id }, include: { assignedRoute: true } });
+      if (dbUser) return { ...dbUser, assignedRouteName: dbUser.assignedRoute?.name };
     } catch {
       // See findUserForLogin fallback note.
     }

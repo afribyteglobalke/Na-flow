@@ -16,7 +16,13 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.string().default("info"),
   DEFAULT_SPEED_LIMIT_URBAN: z.coerce.number().default(50),
-  DEFAULT_SPEED_LIMIT_HIGHWAY: z.coerce.number().default(80)
+  DEFAULT_SPEED_LIMIT_HIGHWAY: z.coerce.number().default(80),
+  MPESA_CONSUMER_KEY: z.string().optional(),
+  MPESA_CONSUMER_SECRET: z.string().optional(),
+  MPESA_SHORTCODE: z.string().optional(),
+  MPESA_PASSKEY: z.string().optional(),
+  MPESA_CALLBACK_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  MPESA_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox")
 });
 
 export type Env = z.infer<typeof envSchema>;

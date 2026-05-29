@@ -4,45 +4,22 @@ import { PrismaClient, UserRole, VehicleStatus } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const routes = [
-  {
-    name: "KBS-01",
-    origin: "Westlands",
-    destination: "CBD",
-    distanceKm: 8.4,
-    stages: [
-      { name: "Westlands", latitude: -1.2674, longitude: 36.8065 },
-      { name: "Museum Hill", latitude: -1.2745, longitude: 36.8157 },
-      { name: "Kencom", latitude: -1.2864, longitude: 36.8267 }
-    ]
-  },
-  {
-    name: "KBS-03",
-    origin: "Karen",
-    destination: "CBD",
-    distanceKm: 16.8,
-    stages: [
-      { name: "Karen", latitude: -1.3192, longitude: 36.7073 },
-      { name: "Langata", latitude: -1.3312, longitude: 36.7812 },
-      { name: "Railways", latitude: -1.2921, longitude: 36.8276 }
-    ]
-  },
-  {
-    name: "KBS-05",
-    origin: "Thika",
-    destination: "CBD",
-    distanceKm: 44.2,
-    stages: [
-      { name: "Thika", latitude: -1.0333, longitude: 37.0693 },
-      { name: "Ruiru", latitude: -1.1466, longitude: 36.9613 },
-      { name: "CBD", latitude: -1.2864, longitude: 36.8172 }
-    ]
-  }
+  { name: "Zimmerman", origin: "Zimmerman", destination: "CBD", distanceKm: 14.2 },
+  { name: "Kasarani", origin: "Kasarani", destination: "CBD", distanceKm: 16.4 },
+  { name: "Githurai", origin: "Githurai", destination: "CBD", distanceKm: 21.8 },
+  { name: "Juja", origin: "Juja", destination: "CBD", distanceKm: 34.7 },
+  { name: "Thika", origin: "Thika", destination: "CBD", distanceKm: 44.2 },
+  { name: "Ngong", origin: "Ngong", destination: "CBD", distanceKm: 22.5 },
+  { name: "Roysambu", origin: "Roysambu", destination: "CBD", distanceKm: 13.6 },
+  { name: "Mombasa Road", origin: "Mombasa Road", destination: "CBD", distanceKm: 18.9 },
+  { name: "Kikuyu", origin: "Kikuyu", destination: "CBD", distanceKm: 24.1 }
 ];
 
 async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash("Admin@12345", 12);
   const marshalPasswordHash = await bcrypt.hash("Marshal@12345", 12);
   const driverPasswordHash = await bcrypt.hash("Driver@12345", 12);
+  const conductorPasswordHash = await bcrypt.hash("Conductor@12345", 12);
 
   await prisma.user.upsert({
     where: { email: "admin@na-flow.local" },
@@ -80,8 +57,8 @@ async function main(): Promise<void> {
     createdRoutes.push(
       await prisma.route.upsert({
         where: { name: route.name },
-        update: route,
-        create: route
+        update: { ...route, stages: [{ name: route.origin }, { name: route.destination }] },
+        create: { ...route, stages: [{ name: route.origin }, { name: route.destination }] }
       })
     );
   }
@@ -90,6 +67,11 @@ async function main(): Promise<void> {
     throw new Error("Seed requires at least one route");
   }
 
+  await prisma.user.update({
+    where: { email: "marshal@na-flow.local" },
+    data: { assignedRouteId: primaryRoute.id }
+  });
+
   const demoDriverUser = await prisma.user.upsert({
     where: { email: "driver@na-flow.local" },
     update: {
@@ -97,7 +79,8 @@ async function main(): Promise<void> {
       passwordHash: driverPasswordHash,
       passwordChangeAllowed: false,
       role: UserRole.DRIVER,
-      assignedRouteId: primaryRoute.id
+      assignedRouteId: primaryRoute.id,
+      assignedVehicleId: "KBZ-482D"
     },
     create: {
       name: "James Mwangi",
@@ -106,11 +89,12 @@ async function main(): Promise<void> {
       passwordHash: driverPasswordHash,
       passwordChangeAllowed: false,
       role: UserRole.DRIVER,
-      assignedRouteId: primaryRoute.id
+      assignedRouteId: primaryRoute.id,
+      assignedVehicleId: "KBZ-482D"
     }
   });
 
-  await prisma.driver.upsert({
+  const demoDriverProfile = await prisma.driver.upsert({
     where: { userId: demoDriverUser.id },
     update: {},
     create: {
@@ -119,6 +103,47 @@ async function main(): Promise<void> {
       licenseExpiry: new Date("2028-12-31T00:00:00.000Z"),
       safetyScore: 98,
       mpesaPhone: "+254700000003"
+    }
+  });
+
+  await prisma.user.upsert({
+    where: { email: "conductor@na-flow.local" },
+    update: {
+      name: "Mary Wairimu",
+      passwordHash: conductorPasswordHash,
+      passwordChangeAllowed: false,
+      role: UserRole.CONDUCTOR,
+      assignedRouteId: primaryRoute.id,
+      assignedVehicleId: "KBZ-482D"
+    },
+    create: {
+      name: "Mary Wairimu",
+      email: "conductor@na-flow.local",
+      phone: "+254700000004",
+      passwordHash: conductorPasswordHash,
+      passwordChangeAllowed: false,
+      role: UserRole.CONDUCTOR,
+      assignedRouteId: primaryRoute.id,
+      assignedVehicleId: "KBZ-482D"
+    }
+  });
+
+  await prisma.vehicle.upsert({
+    where: { id: "KBZ-482D" },
+    update: {
+      assignedRouteId: primaryRoute.id,
+      currentDriverId: demoDriverProfile.id
+    },
+    create: {
+      id: "KBZ-482D",
+      nickname: "Thunder",
+      capacity: 33,
+      year: 2021,
+      makeModel: "Isuzu NQR",
+      assignedRouteId: primaryRoute.id,
+      currentDriverId: demoDriverProfile.id,
+      status: VehicleStatus.ACTIVE,
+      odometer: 58240
     }
   });
 

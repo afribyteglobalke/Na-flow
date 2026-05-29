@@ -15,7 +15,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -67,6 +68,7 @@ button {
 .login-panel input,
 .shift-panel select,
 .create-driver-panel input,
+.create-driver-panel select,
 .table-search input {
   width: 100%;
   min-height: 42px;
@@ -80,15 +82,30 @@ button {
   padding: 20px;
 }
 
+.crew-admin-grid {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+}
+
 .create-driver-panel form {
   display: grid;
   grid-template-columns: repeat(4, minmax(150px, 1fr));
   gap: 12px;
 }
 
+.crew-assignment-panel form {
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+}
+
 .create-driver-panel p {
   margin: 12px 0 0;
   color: #696965;
+}
+
+.crew-table {
+  margin: 18px 0;
+  padding: 20px;
 }
 
 .success-text {
@@ -895,6 +912,50 @@ th {
   gap: 12px;
 }
 
+.conductor-total-panel {
+  margin-top: 22px;
+  padding: 22px;
+}
+
+.collection-total {
+  margin: 12px 0 20px;
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 900;
+}
+
+.conductor-total-panel dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.conductor-total-panel dt {
+  color: #777;
+  font-size: 12px;
+}
+
+.conductor-total-panel dd {
+  margin: 4px 0 0;
+  font-weight: 850;
+}
+
+.collection-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.collection-list article {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #ecece8;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
 .driver-card dt,
 .alert-detail dt,
 .maintenance-card dt,
@@ -1063,6 +1124,11 @@ th {
   .create-driver-panel form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .conductor-total-panel dl,
+  .collection-list article {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 700px) {
@@ -1101,6 +1167,11 @@ th {
   }
 
   .create-driver-panel form {
+    grid-template-columns: 1fr;
+  }
+
+  .conductor-total-panel dl,
+  .collection-list article {
     grid-template-columns: 1fr;
   }
 

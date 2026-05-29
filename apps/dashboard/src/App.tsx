@@ -83,6 +83,7 @@ interface DemoTrip {
 
 interface DemoDriver {
   id: string;
+  userId?: string;
   name: string;
   licenseNumber: string;
   experience: string;
@@ -93,6 +94,28 @@ interface DemoDriver {
   tripsToday: number;
   revenueKes: number;
   harshEvents: number;
+}
+
+interface DemoConductor {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  vehicle: string;
+  route: string;
+  passwordChangeAllowed: boolean;
+}
+
+interface CrewAssignment {
+  id: string;
+  vehicleId: string;
+  plate: string;
+  route: string;
+  driverUserId?: string;
+  driverName?: string;
+  conductorUserId?: string;
+  conductorName?: string;
+  assignedAt: string;
 }
 
 interface DemoMaintenanceJob {
@@ -121,12 +144,36 @@ interface RevenueSummary {
 
 interface DriverShift {
   id: string;
-  driverUserId: string;
-  driverName: string;
+  userId: string;
+  staffName: string;
+  role: "DRIVER" | "CONDUCTOR";
   vehicleId: string;
   route: string;
   startedAt: string;
   status: "ACTIVE" | "ENDED";
+}
+
+interface VehiclePaymentSummary {
+  vehicleId: string;
+  totalKes: number;
+  driverShareKes: number;
+  conductorShareKes: number;
+  transactions: Array<{
+    id: string;
+    amountKes: number;
+    phone: string;
+    requestedByRole: "DRIVER" | "CONDUCTOR";
+    status: "QUEUED" | "PENDING" | "PAID" | "FAILED";
+    createdAt: string;
+  }>;
+}
+
+interface RouteOption {
+  id: string;
+  name: string;
+  origin: string;
+  destination: string;
+  distanceKm: number;
 }
 
 const navItems: Array<{ label: DashboardView; icon: LucideIcon }> = [
@@ -184,6 +231,7 @@ function LoginScreen(): JSX.Element {
           <span>Admin: admin@na-flow.local / Admin@12345</span>
           <span>Fleet marshal: marshal@na-flow.local / Marshal@12345</span>
           <span>Driver: driver@na-flow.local / Driver@12345</span>
+          <span>Conductor: conductor@na-flow.local / Conductor@12345</span>
         </div>
         <form
           onSubmit={(event) => {
@@ -347,7 +395,13 @@ function DriverWorkspace(): JSX.Element {
   const queryClient = useQueryClient();
   const { data: shift } = useQuery({ queryKey: ["shift"], queryFn: () => apiGet<DriverShift | null>("/shifts/current") });
   const { data: vehicles = [] } = useQuery({ queryKey: ["vehicles"], queryFn: () => apiGet<LiveVehicleState[]>("/vehicles") });
+  const { data: routes = [] } = useQuery({ queryKey: ["routes"], queryFn: () => apiGet<RouteOption[]>("/routes") });
   const assignedVehicle = vehicles.find((vehicle) => vehicle.vehicleId === (shift?.vehicleId ?? user?.assignedVehicleId)) ?? vehicles[0];
+  const { data: collectionSummary } = useQuery({
+    queryKey: ["vehicle-payment-summary", assignedVehicle?.vehicleId],
+    enabled: Boolean(assignedVehicle?.vehicleId),
+    queryFn: () => apiGet<VehiclePaymentSummary>(`/payments/vehicle/${assignedVehicle!.vehicleId}/summary`)
+  });
   const checkIn = useMutation({
     mutationFn: (input: { vehicleId: string; route: string }) => apiPost<DriverShift>("/shifts/check-in", input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift"] })
@@ -379,8 +433,8 @@ function DriverWorkspace(): JSX.Element {
             </label>
             <label>
               Route
-              <select name="route" defaultValue={shift?.route ?? user?.assignedRoute ?? "KBS-01"}>
-                {["KBS-01", "KBS-02", "KBS-03", "KBS-04", "KBS-05"].map((route) => <option key={route}>{route}</option>)}
+              <select name="route" defaultValue={shift?.route ?? user?.assignedRoute ?? "Zimmerman"}>
+                {routes.map((route) => <option key={route.id} value={route.name}>{route.name}</option>)}
               </select>
             </label>
             <button className="primary-button" type="submit">{shift ? "Update Shift" : "Check In"}</button>
@@ -398,12 +452,100 @@ function DriverWorkspace(): JSX.Element {
                 <div><dt>Passengers</dt><dd>{assignedVehicle.passengerCount}</dd></div>
                 <div><dt>Fuel</dt><dd>{assignedVehicle.fuelPercent}%</dd></div>
                 <div><dt>Trips Today</dt><dd>{assignedVehicle.tripsToday}</dd></div>
-                <div><dt>Revenue</dt><dd>{formatKes(assignedVehicle.revenueTodayKes)}</dd></div>
+                <div><dt>Shared Bus Total</dt><dd>{formatKes(collectionSummary?.totalKes ?? assignedVehicle.revenueTodayKes)}</dd></div>
               </dl>
             </>
           ) : <p>No vehicle data available.</p>}
         </section>
       </div>
+    </>
+  );
+}
+
+function ConductorWorkspace(): JSX.Element {
+  const user = useSessionStore((state) => state.user);
+  const queryClient = useQueryClient();
+  const { data: shift } = useQuery({ queryKey: ["shift"], queryFn: () => apiGet<DriverShift | null>("/shifts/current") });
+  const { data: vehicles = [] } = useQuery({ queryKey: ["vehicles"], queryFn: () => apiGet<LiveVehicleState[]>("/vehicles") });
+  const { data: routes = [] } = useQuery({ queryKey: ["routes"], queryFn: () => apiGet<RouteOption[]>("/routes") });
+  const activeVehicleId = shift?.vehicleId ?? user?.assignedVehicleId ?? "KBZ-482D";
+  const activeVehicle = vehicles.find((vehicle) => vehicle.vehicleId === activeVehicleId || vehicle.plate === activeVehicleId) ?? vehicles[0];
+  const { data: summary } = useQuery({
+    queryKey: ["vehicle-payment-summary", activeVehicle?.vehicleId],
+    enabled: Boolean(activeVehicle?.vehicleId),
+    queryFn: () => apiGet<VehiclePaymentSummary>(`/payments/vehicle/${activeVehicle!.vehicleId}/summary`)
+  });
+  const checkIn = useMutation({
+    mutationFn: (input: { vehicleId: string; route: string }) => apiPost<DriverShift>("/shifts/check-in", input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift"] })
+  });
+  const stkPush = useMutation({
+    mutationFn: (input: { phone: string; amountKes: number; vehicleId: string; route: string }) => apiPost("/payments/mpesa/stk-push", input),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle-payment-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+    }
+  });
+
+  return (
+    <>
+      <PageTitle title="Conductor Collections" subtitle="Request passenger payments and track the shared bus total." />
+      <div className="driver-workspace">
+        <section className="panel shift-panel">
+          <h2>{shift ? "Checked In" : "Check Into Bus"}</h2>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              checkIn.mutate({ vehicleId: String(form.get("vehicleId")), route: String(form.get("route")) });
+            }}
+          >
+            <label>Bus number plate<input name="vehicleId" defaultValue={shift?.vehicleId ?? user?.assignedVehicleId ?? "KBZ-482D"} /></label>
+            <label>Route<select name="route" defaultValue={shift?.route ?? user?.assignedRoute ?? "Zimmerman"}>{routes.map((route) => <option key={route.id} value={route.name}>{route.name}</option>)}</select></label>
+            <button className="primary-button" type="submit">{shift ? "Update Bus" : "Check In"}</button>
+          </form>
+        </section>
+        <section className="panel shift-panel">
+          <h2>Ask Client To Pay</h2>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              stkPush.mutate({
+                phone: String(form.get("phone")),
+                amountKes: Number(form.get("amountKes")),
+                vehicleId: activeVehicle?.vehicleId ?? String(form.get("vehicleId")),
+                route: shift?.route ?? user?.assignedRoute ?? "Zimmerman"
+              });
+            }}
+          >
+            <label>Client phone<input name="phone" placeholder="07XXXXXXXX" /></label>
+            <label>Fare amount<input name="amountKes" type="number" min="1" defaultValue="100" /></label>
+            <button className="primary-button" type="submit" disabled={stkPush.isPending}>{stkPush.isPending ? "Prompting..." : "Send STK Push"}</button>
+          </form>
+          {stkPush.error ? <small className="form-error">{stkPush.error.message}</small> : null}
+          {stkPush.isSuccess ? <small className="success-text">Payment prompt queued/sent.</small> : null}
+        </section>
+      </div>
+      <section className="panel conductor-total-panel">
+        <h2>{activeVehicle?.plate ?? "Bus"} Collections</h2>
+        <div className="collection-total">{formatKes(summary?.totalKes ?? activeVehicle?.revenueTodayKes ?? 0)}</div>
+        <dl>
+          <div><dt>Driver share</dt><dd>{formatKes(summary?.driverShareKes ?? 0)}</dd></div>
+          <div><dt>Conductor share</dt><dd>{formatKes(summary?.conductorShareKes ?? 0)}</dd></div>
+          <div><dt>Bus plate</dt><dd>{activeVehicle?.plate ?? activeVehicleId}</dd></div>
+          <div><dt>Route</dt><dd>{shift?.route ?? activeVehicle?.routeName ?? "Zimmerman"}</dd></div>
+        </dl>
+        <div className="collection-list">
+          {(summary?.transactions ?? []).slice().reverse().map((item) => (
+            <article key={item.id}>
+              <strong>{formatKes(item.amountKes)}</strong>
+              <span>{item.phone}</span>
+              <small>{item.requestedByRole} · {item.status}</small>
+            </article>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
@@ -418,7 +560,7 @@ function FleetMarshalWorkspace(): JSX.Element {
         <Metric label="BUSES VISIBLE" value={String(summary.vehicles.length)} />
         <Metric label="MOVING NOW" value="28" />
         <Metric label="OPEN ALERTS" value={String(summary.alerts.filter((alert) => alert.status === "OPEN").length)} />
-        <Metric label="PRIMARY ROUTE" value="KBS-01" />
+        <Metric label="PRIMARY ROUTE" value="Zimmerman" />
       </section>
       <div className="live-map-layout">
         <section className="panel"><FleetMap vehicles={summary.vehicles} large /></section>
@@ -430,6 +572,7 @@ function FleetMarshalWorkspace(): JSX.Element {
 
 function LiveMapScreen(): JSX.Element {
   const { data = [] } = useQuery({ queryKey: ["vehicles"], queryFn: () => apiGet<LiveVehicleState[]>("/vehicles") });
+  const { data: routes = [] } = useQuery({ queryKey: ["routes"], queryFn: () => apiGet<RouteOption[]>("/routes") });
   const [route, setRoute] = useLocalState("All Routes");
   const filtered = route === "All Routes" ? data : data.filter((vehicle) => vehicle.routeName === route);
   const selectedVehicleId = useUiStore((state) => state.selectedVehicleId);
@@ -439,7 +582,7 @@ function LiveMapScreen(): JSX.Element {
     <>
       <PageTitle title="Live Fleet Map" subtitle={`${filtered.length} vehicles`} />
       <div className="route-filter">
-        {["All Routes", "KBS-01", "KBS-02", "KBS-03", "KBS-04", "KBS-05"].map((item) => (
+        {["All Routes", ...routes.map((item) => item.name)].map((item) => (
           <button className={route === item ? "segment active" : "segment"} key={item} onClick={() => setRoute(item)} type="button">{item}</button>
         ))}
       </div>
@@ -536,6 +679,10 @@ function DriversScreen(): JSX.Element {
   const queryClient = useQueryClient();
   const user = useSessionStore((state) => state.user);
   const { data = [] } = useQuery({ queryKey: ["drivers"], queryFn: () => apiGet<DemoDriver[]>("/drivers") });
+  const { data: conductors = [] } = useQuery({ queryKey: ["conductors"], queryFn: () => apiGet<DemoConductor[]>("/conductors") });
+  const { data: crew = [] } = useQuery({ queryKey: ["crew"], queryFn: () => apiGet<CrewAssignment[]>("/crew") });
+  const { data: vehicles = [] } = useQuery({ queryKey: ["vehicles"], queryFn: () => apiGet<LiveVehicleState[]>("/vehicles") });
+  const { data: routes = [] } = useQuery({ queryKey: ["routes"], queryFn: () => apiGet<RouteOption[]>("/routes") });
   const createDriver = useMutation({
     mutationFn: (input: {
       name: string;
@@ -545,53 +692,177 @@ function DriversScreen(): JSX.Element {
       licenseNumber: string;
       licenseExpiry: string;
       mpesaPhone: string;
+      assignedVehicleId?: string;
+      assignedRouteId?: string;
     }) => apiPost("/drivers", input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["drivers"] })
+  });
+  const createConductor = useMutation({
+    mutationFn: (input: {
+      name: string;
+      email: string;
+      phone: string;
+      password: string;
+      assignedVehicleId?: string;
+      assignedRouteId?: string;
+    }) => apiPost("/conductors", input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["conductors"] })
+  });
+  const assignCrew = useMutation({
+    mutationFn: (input: { vehicleId: string; route: string; driverUserId?: string; conductorUserId?: string }) => apiPost("/crew/assign", input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crew"] });
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+      queryClient.invalidateQueries({ queryKey: ["conductors"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+    }
   });
 
   return (
     <>
-      <PageTitle title="Driver Management" subtitle="Monitor driver performance and safety" />
+      <PageTitle title="Crew Management" subtitle="Register drivers and conductors, then assign them to the same bus and route." />
       {user?.role === "SUPER_ADMIN" ? (
-        <section className="panel create-driver-panel">
-          <h2>Add Driver</h2>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              createDriver.mutate({
-                name: String(form.get("name")),
-                email: String(form.get("email")),
-                phone: String(form.get("phone")),
-                password: String(form.get("password")),
-                licenseNumber: String(form.get("licenseNumber")),
-                licenseExpiry: String(form.get("licenseExpiry")),
-                mpesaPhone: String(form.get("mpesaPhone"))
-              });
-              event.currentTarget.reset();
-            }}
-          >
-            <input name="name" placeholder="Driver name" required />
-            <input name="email" placeholder="Email" type="email" required />
-            <input name="phone" placeholder="Phone" required />
-            <input name="password" placeholder="Initial password" type="password" minLength={8} required />
-            <input name="licenseNumber" placeholder="License number" required />
-            <input name="licenseExpiry" type="date" required />
-            <input name="mpesaPhone" placeholder="M-Pesa phone" required />
-            <button className="primary-button" type="submit" disabled={createDriver.isPending}>
-              {createDriver.isPending ? "Creating..." : "Create Driver"}
-            </button>
-          </form>
-          <p>Driver passwords are admin-managed and cannot be changed by drivers.</p>
-          {createDriver.isSuccess ? <small className="success-text">Driver created.</small> : null}
-          {createDriver.error ? <small className="form-error">{createDriver.error.message}</small> : null}
-        </section>
+        <div className="crew-admin-grid">
+          <section className="panel create-driver-panel">
+            <h2>Add Driver</h2>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                createDriver.mutate({
+                  name: String(form.get("name")),
+                  email: String(form.get("email")),
+                  phone: String(form.get("phone")),
+                  password: String(form.get("password")),
+                  licenseNumber: String(form.get("licenseNumber")),
+                  licenseExpiry: String(form.get("licenseExpiry")),
+                  mpesaPhone: String(form.get("mpesaPhone")),
+                  ...(String(form.get("assignedVehicleId") || "") ? { assignedVehicleId: String(form.get("assignedVehicleId")) } : {}),
+                  ...(String(form.get("assignedRouteId") || "") ? { assignedRouteId: String(form.get("assignedRouteId")) } : {})
+                });
+                event.currentTarget.reset();
+              }}
+            >
+              <input name="name" placeholder="Driver name" required />
+              <input name="email" placeholder="Email" type="email" required />
+              <input name="phone" placeholder="Phone" required />
+              <input name="password" placeholder="Initial password" type="password" minLength={8} required />
+              <input name="licenseNumber" placeholder="License number" required />
+              <input name="licenseExpiry" type="date" required />
+              <input name="mpesaPhone" placeholder="M-Pesa phone" required />
+              <select name="assignedVehicleId" defaultValue="">
+                <option value="">Bus number</option>
+                {vehicles.map((vehicle) => <option key={vehicle.vehicleId} value={vehicle.vehicleId}>{vehicle.plate}</option>)}
+              </select>
+              <select name="assignedRouteId" defaultValue="">
+                <option value="">Route</option>
+                {routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
+              </select>
+              <button className="primary-button" type="submit" disabled={createDriver.isPending}>
+                {createDriver.isPending ? "Creating..." : "Create Driver"}
+              </button>
+            </form>
+            <p>Driver passwords are admin-managed and cannot be changed by drivers.</p>
+            {createDriver.isSuccess ? <small className="success-text">Driver created.</small> : null}
+            {createDriver.error ? <small className="form-error">{createDriver.error.message}</small> : null}
+          </section>
+          <section className="panel create-driver-panel">
+            <h2>Add Conductor</h2>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                createConductor.mutate({
+                  name: String(form.get("name")),
+                  email: String(form.get("email")),
+                  phone: String(form.get("phone")),
+                  password: String(form.get("password")),
+                  ...(String(form.get("assignedVehicleId") || "") ? { assignedVehicleId: String(form.get("assignedVehicleId")) } : {}),
+                  ...(String(form.get("assignedRouteId") || "") ? { assignedRouteId: String(form.get("assignedRouteId")) } : {})
+                });
+                event.currentTarget.reset();
+              }}
+            >
+              <input name="name" placeholder="Conductor name" required />
+              <input name="email" placeholder="Email" type="email" required />
+              <input name="phone" placeholder="Phone" required />
+              <input name="password" placeholder="Initial password" type="password" minLength={8} required />
+              <select name="assignedVehicleId" defaultValue="">
+                <option value="">Bus number</option>
+                {vehicles.map((vehicle) => <option key={vehicle.vehicleId} value={vehicle.vehicleId}>{vehicle.plate}</option>)}
+              </select>
+              <select name="assignedRouteId" defaultValue="">
+                <option value="">Route</option>
+                {routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
+              </select>
+              <button className="primary-button" type="submit" disabled={createConductor.isPending}>
+                {createConductor.isPending ? "Creating..." : "Create Conductor"}
+              </button>
+            </form>
+            <p>Conductors collect fares through STK push. Their passwords are admin-managed.</p>
+            {createConductor.isSuccess ? <small className="success-text">Conductor created.</small> : null}
+            {createConductor.error ? <small className="form-error">{createConductor.error.message}</small> : null}
+          </section>
+          <section className="panel create-driver-panel crew-assignment-panel">
+            <h2>Assign Bus Crew</h2>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                assignCrew.mutate({
+                  vehicleId: String(form.get("vehicleId")),
+                  route: String(form.get("route")),
+                  ...(String(form.get("driverUserId") || "") ? { driverUserId: String(form.get("driverUserId")) } : {}),
+                  ...(String(form.get("conductorUserId") || "") ? { conductorUserId: String(form.get("conductorUserId")) } : {})
+                });
+              }}
+            >
+              <select name="vehicleId" required>
+                {vehicles.map((vehicle) => <option key={vehicle.vehicleId} value={vehicle.vehicleId}>{vehicle.plate}</option>)}
+              </select>
+              <select name="route" required>
+                {routes.map((route) => <option key={route.id} value={route.name}>{route.name}</option>)}
+              </select>
+              <select name="driverUserId" defaultValue="">
+                <option value="">Driver</option>
+                {data.map((driver) => <option key={driver.id} value={driver.userId ?? driver.id}>{driver.name}</option>)}
+              </select>
+              <select name="conductorUserId" defaultValue="">
+                <option value="">Conductor</option>
+                {conductors.map((conductor) => <option key={conductor.id} value={conductor.id}>{conductor.name}</option>)}
+              </select>
+              <button className="primary-button" type="submit" disabled={assignCrew.isPending}>
+                {assignCrew.isPending ? "Assigning..." : "Save Assignment"}
+              </button>
+            </form>
+            <p>The selected driver and conductor inherit the same bus number and route, and the bus collection total is shared on both workspaces.</p>
+            {assignCrew.isSuccess ? <small className="success-text">Crew assignment saved.</small> : null}
+            {assignCrew.error ? <small className="form-error">{assignCrew.error.message}</small> : null}
+          </section>
+        </div>
       ) : null}
       <section className="mini-kpis">
-        <Metric label="TOTAL DRIVERS" value="52" />
+        <Metric label="TOTAL DRIVERS" value={String(data.length)} />
+        <Metric label="TOTAL CONDUCTORS" value={String(conductors.length)} />
         <Metric label="AVG SAFETY SCORE" value="94" />
-        <Metric label="ACTIVE TODAY" value="42" />
-        <Metric label="TOP PERFORMERS" value="12" />
+        <Metric label="CREW ASSIGNMENTS" value={String(crew.length)} />
+      </section>
+      <section className="panel crew-table">
+        <h2>Bus Crew Assignments</h2>
+        <table>
+          <thead><tr><th>Bus</th><th>Route</th><th>Driver</th><th>Conductor</th><th>Assigned</th></tr></thead>
+          <tbody>
+            {crew.map((assignment) => (
+              <tr key={assignment.id}>
+                <td>{assignment.plate}</td>
+                <td>{assignment.route}</td>
+                <td>{assignment.driverName ?? "Unassigned"}</td>
+                <td>{assignment.conductorName ?? "Unassigned"}</td>
+                <td>{new Date(assignment.assignedAt).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
       <section className="driver-grid">
         {data.map((driver) => (
@@ -785,6 +1056,7 @@ function ScreenRouter(): JSX.Element {
   const role = useSessionStore((state) => state.user?.role);
 
   if (role === "DRIVER") return <DriverWorkspace />;
+  if (role === "CONDUCTOR") return <ConductorWorkspace />;
   if (role === "FLEET_MARSHAL" && (activeView === "Reports" || activeView === "Revenue" || activeView === "Drivers" || activeView === "Maintenance" || activeView === "Trips")) {
     return <FleetMarshalWorkspace />;
   }
@@ -822,6 +1094,7 @@ function labelRole(role: string): string {
 
 function canViewNav(role: string | undefined, view: DashboardView): boolean {
   if (role === "DRIVER") return false;
+  if (role === "CONDUCTOR") return false;
   if (role === "FLEET_MARSHAL") return view === "Live Map" || view === "Fleet" || view === "Alerts" || view === "Reports";
   return true;
 }

@@ -1,9 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import { fail, ok } from "../../utils/api-response.js";
 import { demoLiveVehicles } from "../../seed/demo-live-vehicles.js";
+import type { AuthUser } from "../../middleware/authenticate.js";
 
 export async function registerVehicleRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/", async (_request, reply) => {
+  app.get("/", async (request, reply) => {
+    const user = request.user as AuthUser | undefined;
+    if (user?.role === "FLEET_MARSHAL" && user.assignedRoute) {
+      return ok(reply, demoLiveVehicles.filter((vehicle) => vehicle.routeName === user.assignedRoute));
+    }
+
+    if ((user?.role === "DRIVER" || user?.role === "CONDUCTOR") && user.assignedVehicleId) {
+      return ok(reply, demoLiveVehicles.filter((vehicle) => vehicle.vehicleId === user.assignedVehicleId || vehicle.plate === user.assignedVehicleId));
+    }
+
     return ok(reply, demoLiveVehicles);
   });
 

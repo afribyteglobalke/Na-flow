@@ -77,6 +77,7 @@ model User {
   passwordChangeAllowed Boolean @default(true)
   role            UserRole
   assignedRouteId String?
+  assignedVehicleId String?
   assignedRoute   Route?     @relation(fields: [assignedRouteId], references: [id])
   createdAt       DateTime   @default(now())
   lastLoginAt     DateTime?
@@ -86,6 +87,7 @@ model User {
 
   @@index([role])
   @@index([assignedRouteId])
+  @@index([assignedVehicleId])
 }
 
 model Route {

@@ -1,9 +1,15 @@
 import type { FastifyInstance } from "fastify";
+import type { AuthUser } from "../../middleware/authenticate.js";
 import { demoAlerts, demoDrivers, demoVehicles, revenueByRoute } from "../../seed/demo-domain.js";
 import { ok } from "../../utils/api-response.js";
 
 export async function registerDashboardRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/summary", async (_request, reply) => {
+  app.get("/summary", async (request, reply) => {
+    const user = request.user as AuthUser | undefined;
+    const vehicles = user?.role === "FLEET_MARSHAL" && user.assignedRoute
+      ? demoVehicles.filter((vehicle) => vehicle.routeName === user.assignedRoute)
+      : demoVehicles;
+
     return ok(reply, {
       kpis: {
         activeVehicles: "42/52",
@@ -11,9 +17,9 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
         criticalAlerts: demoAlerts.filter((alert) => alert.severity === "CRITICAL" && alert.status === "OPEN").length,
         fleetAvailabilityPct: 84
       },
-      vehicles: demoVehicles,
+      vehicles,
       alerts: demoAlerts.slice(0, 5),
-      topEarner: demoVehicles[0],
+      topEarner: vehicles[0] ?? demoVehicles[0],
       fleetStatus: [
         { label: "Moving", value: 28, pct: 54 },
         { label: "Idle", value: 14, pct: 27 },

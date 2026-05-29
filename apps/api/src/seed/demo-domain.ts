@@ -13,13 +13,60 @@ export interface DemoUser {
 
 export interface DemoShift {
   id: string;
-  driverUserId: string;
-  driverName: string;
+  userId: string;
+  staffName: string;
+  role: "DRIVER" | "CONDUCTOR";
   vehicleId: string;
   route: string;
   startedAt: string;
   status: "ACTIVE" | "ENDED";
 }
+
+export interface DemoFareCollection {
+  id: string;
+  vehicleId: string;
+  plate: string;
+  route: string;
+  amountKes: number;
+  phone: string;
+  requestedByUserId: string;
+  requestedByRole: "DRIVER" | "CONDUCTOR";
+  checkoutRequestId: string;
+  status: "QUEUED" | "PENDING" | "PAID" | "FAILED";
+  createdAt: string;
+}
+
+export interface DemoCrewAssignment {
+  id: string;
+  vehicleId: string;
+  plate: string;
+  route: string;
+  driverUserId?: string;
+  driverName?: string;
+  conductorUserId?: string;
+  conductorName?: string;
+  assignedAt: string;
+}
+
+export interface DemoRouteOption {
+  id: string;
+  name: string;
+  origin: string;
+  destination: string;
+  distanceKm: number;
+}
+
+export const routeOptions: DemoRouteOption[] = [
+  { id: "route-zimmerman", name: "Zimmerman", origin: "Zimmerman", destination: "CBD", distanceKm: 14.2 },
+  { id: "route-kasarani", name: "Kasarani", origin: "Kasarani", destination: "CBD", distanceKm: 16.4 },
+  { id: "route-githurai", name: "Githurai", origin: "Githurai", destination: "CBD", distanceKm: 21.8 },
+  { id: "route-juja", name: "Juja", origin: "Juja", destination: "CBD", distanceKm: 34.7 },
+  { id: "route-thika", name: "Thika", origin: "Thika", destination: "CBD", distanceKm: 44.2 },
+  { id: "route-ngong", name: "Ngong", origin: "Ngong", destination: "CBD", distanceKm: 22.5 },
+  { id: "route-roysambu", name: "Roysambu", origin: "Roysambu", destination: "CBD", distanceKm: 13.6 },
+  { id: "route-mombasa-road", name: "Mombasa Road", origin: "Mombasa Road", destination: "CBD", distanceKm: 18.9 },
+  { id: "route-kikuyu", name: "Kikuyu", origin: "Kikuyu", destination: "CBD", distanceKm: 24.1 }
+];
 
 export interface DemoAlert {
   id: string;
@@ -90,7 +137,7 @@ export const demoUsers: DemoUser[] = [
     password: "Marshal@12345",
     name: "Samuel Njoroge",
     role: "FLEET_MARSHAL",
-    assignedRoute: "KBS-01"
+    assignedRoute: "Zimmerman"
   },
   {
     id: "usr-driver",
@@ -100,17 +147,55 @@ export const demoUsers: DemoUser[] = [
     name: "James Mwangi",
     role: "DRIVER",
     assignedVehicleId: "KBZ-482D",
-    assignedRoute: "KBS-01"
+    assignedRoute: "Zimmerman"
+  },
+  {
+    id: "usr-conductor",
+    email: "conductor@na-flow.local",
+    phone: "+254700000004",
+    password: "Conductor@12345",
+    name: "Mary Wairimu",
+    role: "CONDUCTOR",
+    assignedVehicleId: "KBZ-482D",
+    assignedRoute: "Zimmerman"
   }
 ];
 
 export const demoShifts: DemoShift[] = [];
+export const demoCrewAssignments: DemoCrewAssignment[] = [
+  {
+    id: "crew-kbz-482d",
+    vehicleId: "KBZ-482D",
+    plate: "KBZ 482D",
+    route: "Zimmerman",
+    driverUserId: "usr-driver",
+    driverName: "James Mwangi",
+    conductorUserId: "usr-conductor",
+    conductorName: "Mary Wairimu",
+    assignedAt: now
+  }
+];
+export const demoFareCollections: DemoFareCollection[] = [
+  {
+    id: "fare-seed-1",
+    vehicleId: "KBZ-482D",
+    plate: "KBZ 482D",
+    route: "Zimmerman",
+    amountKes: 12400,
+    phone: "+254700000000",
+    requestedByUserId: "usr-conductor",
+    requestedByRole: "CONDUCTOR",
+    checkoutRequestId: "seed",
+    status: "PAID",
+    createdAt: now
+  }
+];
 
 export const demoVehicles: LiveVehicleState[] = [
   {
     vehicleId: "KBZ-482D",
     plate: "KBZ 482D",
-    routeName: "KBS-01",
+    routeName: "Zimmerman",
     driverName: "James Mwangi",
     status: "ACTIVE",
     latitude: -1.2674,
@@ -129,7 +214,7 @@ export const demoVehicles: LiveVehicleState[] = [
   {
     vehicleId: "KCB-123A",
     plate: "KCB 123A",
-    routeName: "KBS-02",
+    routeName: "Kasarani",
     driverName: "Grace Akinyi",
     status: "IDLE",
     latitude: -1.3029,
@@ -148,7 +233,7 @@ export const demoVehicles: LiveVehicleState[] = [
   {
     vehicleId: "KDA-567C",
     plate: "KDA 567C",
-    routeName: "KBS-01",
+    routeName: "Zimmerman",
     driverName: "Peter Kimani",
     status: "ACTIVE",
     latitude: -1.2196,
@@ -167,7 +252,7 @@ export const demoVehicles: LiveVehicleState[] = [
   {
     vehicleId: "KAB-891E",
     plate: "KAB 891E",
-    routeName: "KBS-03",
+    routeName: "Thika",
     driverName: "Mary Wanjiru",
     status: "ACTIVE",
     latitude: -1.2864,
@@ -186,7 +271,7 @@ export const demoVehicles: LiveVehicleState[] = [
   {
     vehicleId: "KBX-234F",
     plate: "KBX 234F",
-    routeName: "KBS-02",
+    routeName: "Kasarani",
     driverName: "David Ochieng",
     status: "ACTIVE",
     latitude: -1.2521,
@@ -204,7 +289,7 @@ export const demoVehicles: LiveVehicleState[] = [
   {
     vehicleId: "KCD-789G",
     plate: "KCD 789G",
-    routeName: "KBS-01",
+    routeName: "Zimmerman",
     driverName: "Brian Otieno",
     status: "OFFLINE",
     latitude: -1.2901,
